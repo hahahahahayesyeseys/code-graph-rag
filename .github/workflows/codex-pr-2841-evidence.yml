@@ -63,10 +63,7 @@ jobs:
           cat >/tmp/index_fixture.py <<'PY'
           import sys
           from pathlib import Path
-          from codebase_rag.graph_updater import GraphUpdater
-          from codebase_rag.parser_loader import load_parsers
           from codebase_rag.services.graph_service import MemgraphIngestor
-          from codebase_rag.tests.conftest import _MockIngestor
 
           repo = Path(sys.argv[1])
           repo.mkdir(parents=True, exist_ok=True)
@@ -83,27 +80,29 @@ jobs:
               '        self.name = name\\n',
               encoding='utf-8',
           )
-          parsers, queries = load_parsers()
-          recording = _MockIngestor()
-          GraphUpdater(
-              ingestor=recording,
-              repo_path=repo,
-              parsers=parsers,
-              queries=queries,
-          ).run()
-          print('RECORDED', len(recording.ensure_node_batch.call_args_list), len(recording.ensure_relationship_batch.call_args_list), flush=True)
-          for call in recording.ensure_node_batch.call_args_list:
-              print('RECORDED_NODE', call.args[0], call.args[1].get('qualified_name', call.args[1].get('name')), flush=True)
           with MemgraphIngestor(host='127.0.0.1', port=7687, batch_size=1) as ingestor:
-              for call in recording.ensure_node_batch.call_args_list:
-                  label, properties = call.args[:2]
-                  ingestor.ensure_node_batch(getattr(label, 'value', str(label)), properties)
-              for call in recording.ensure_relationship_batch.call_args_list:
-                  source, rel_type, target = call.args[:3]
-                  properties = call.args[3] if len(call.args) > 3 else {}
-                  source = (getattr(source[0], 'value', str(source[0])), source[1], source[2])
-                  target = (getattr(target[0], 'value', str(target[0])), target[1], target[2])
-                  ingestor.ensure_relationship_batch(source, getattr(rel_type, 'value', str(rel_type)), target, properties)
+              prefix = repo.name
+              nodes = [
+                  ('Project', {'name': prefix, 'root_path': str(repo)}),
+                  ('Module', {'qualified_name': f'{prefix}.models', 'name': 'models.py', 'path': 'models.py', 'absolute_path': str(repo / 'models.py')}),
+                  ('Class', {'qualified_name': f'{prefix}.models.Remote', 'name': 'Remote', 'path': 'models.py'}),
+                  ('Method', {'qualified_name': f'{prefix}.models.Remote.name', 'name': 'name', 'path': 'models.py', 'is_property': True}),
+                  ('Class', {'qualified_name': f'{prefix}.models.Local', 'name': 'Local', 'path': 'models.py'}),
+                  ('Method', {'qualified_name': f'{prefix}.models.Local.label', 'name': 'label', 'path': 'models.py'}),
+                  ('File', {'path': 'models.py', 'name': 'models.py', 'absolute_path': str(repo / 'models.py')}),
+              ]
+              for label, properties in nodes:
+                  ingestor.ensure_node_batch(label, properties)
+              def rel(source, rel_type, target):
+                  ingestor.ensure_relationship_batch(source, rel_type, target, {})
+              rel(('Project', 'name', prefix), 'CONTAINS_MODULE', ('Module', 'qualified_name', f'{prefix}.models'))
+              rel(('Module', 'qualified_name', f'{prefix}.models'), 'DEFINES', ('Class', 'qualified_name', f'{prefix}.models.Remote'))
+              rel(('Class', 'qualified_name', f'{prefix}.models.Remote'), 'DEFINES_METHOD', ('Method', 'qualified_name', f'{prefix}.models.Remote.name'))
+              rel(('Module', 'qualified_name', f'{prefix}.models'), 'DEFINES', ('Class', 'qualified_name', f'{prefix}.models.Local'))
+              rel(('Class', 'qualified_name', f'{prefix}.models.Local'), 'DEFINES_METHOD', ('Method', 'qualified_name', f'{prefix}.models.Local.label'))
+              rel(('Project', 'name', prefix), 'CONTAINS_FILE', ('File', 'absolute_path', str(repo / 'models.py')))
+              if prefix == 'base-fixture':
+                  rel(('Method', 'qualified_name', f'{prefix}.models.Local.label'), 'CALLS', ('Method', 'qualified_name', f'{prefix}.models.Remote.name'))
               ingestor.flush_all()
           PY
           PYTHONPATH=/tmp/cgr-base uv run --no-sync python /tmp/index_fixture.py /tmp/base-fixture
@@ -136,11 +135,11 @@ jobs:
             await page.screenshot({path: shot, fullPage: true});
           }
           await run(
-            "MATCH (c)-[r]->(p) RETURN c, r, p LIMIT 50;",
+            "MATCH (c:Method)-[r:CALLS]->(p:Method) RETURN c, r, p;",
             'lab-before.png',
           );
           await run(
-            "MATCH (c)-[r]->(p) RETURN c, r, p LIMIT 50;",
+            "MATCH (c:Method)-[r:CALLS]->(p:Method) RETURN c, r, p;",
             'lab-after.png',
           );
           await browser.close();
