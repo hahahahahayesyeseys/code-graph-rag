@@ -91,6 +91,9 @@ jobs:
               parsers=parsers,
               queries=queries,
           ).run()
+          print('RECORDED', len(recording.ensure_node_batch.call_args_list), len(recording.ensure_relationship_batch.call_args_list), flush=True)
+          for call in recording.ensure_node_batch.call_args_list:
+              print('RECORDED_NODE', call.args[0], call.args[1].get('qualified_name', call.args[1].get('name')), flush=True)
           with MemgraphIngestor(host='127.0.0.1', port=7687, batch_size=1) as ingestor:
               for call in recording.ensure_node_batch.call_args_list:
                   label, properties = call.args[:2]
