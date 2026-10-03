@@ -97,7 +97,7 @@ jobs:
           npm install --no-save playwright@1.52.0
           npx playwright install --with-deps chromium
 
-      - name: Render before and after in Memgraph Lab
+      - name: Inspect Memgraph Lab query editor
         run: |
           cat >inspect_lab.mjs <<'JS'
           import { chromium } from 'playwright';
@@ -110,26 +110,11 @@ jobs:
           await page.waitForTimeout(7000);
           await page.keyboard.press('Escape');
           await page.waitForTimeout(1000);
+          const info = await page.locator('textarea, input, [role="textbox"], iframe').evaluateAll(els => els.map(e => ({tag:e.tagName, role:e.getAttribute('role'), aria:e.getAttribute('aria-label'), placeholder:e.getAttribute('placeholder'), cls:e.className, id:e.id, outer:e.outerHTML.slice(0,1000)})));
+          await writeFile('lab-editor-info.json', JSON.stringify(info, null, 2));
           await writeFile('lab-query-body.txt', await page.locator('body').innerText());
-          const editors = page.locator('[contenteditable="true"]');
-          if (await editors.count() === 0) throw new Error('Memgraph Lab query editor not found');
-          const editor = editors.first();
-          async function run(query, shot) {
-            await editor.click();
-            await page.keyboard.press(process.platform === 'darwin' ? 'Meta+A' : 'Control+A');
-            await page.keyboard.type(query);
-            await page.getByRole('button', {name: /Run query/i}).click();
-            await page.waitForTimeout(5000);
-            await page.screenshot({path: shot, fullPage: true});
-          }
-          await run(
-            "MATCH (c:Method)-[r:CALLS]->(p:Method) WHERE c.qualified_name STARTS WITH 'base-fixture' AND c.qualified_name ENDS WITH 'Local.label' RETURN c, r, p;",
-            'lab-before.png',
-          );
-          await run(
-            "MATCH (c:Method)-[r:CALLS]->(p:Method) WHERE c.qualified_name STARTS WITH 'after-fixture' AND c.qualified_name ENDS WITH 'Local.label' RETURN c, r, p;",
-            'lab-after.png',
-          );
+          await page.screenshot({path: 'lab-editor.png', fullPage: true});
+          console.log(JSON.stringify(info, null, 2));
           await browser.close();
           JS
           node inspect_lab.mjs
@@ -140,8 +125,8 @@ jobs:
         with:
           name: pr-2841-lab-discovery
           path: |
-            lab-before.png
-            lab-after.png
+            lab-editor.png
+            lab-editor-info.json
             lab-query-body.txt
           if-no-files-found: ignore
 
