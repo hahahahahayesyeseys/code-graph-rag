@@ -107,7 +107,7 @@ jobs:
           await page.waitForTimeout(3000);
           await page.getByRole('button', {name: 'Connect now'}).first().click();
           await page.waitForTimeout(7000);
-          await page.keyboard.press('Escape');
+          await page.mouse.click(1318, 85);
           await page.waitForTimeout(1000);
           const editor = page.locator('[role="textbox"][aria-label="Editor content"]:visible').first();
           async function run(query, shot) {
