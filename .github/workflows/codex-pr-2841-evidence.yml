@@ -107,11 +107,11 @@ jobs:
           await page.waitForTimeout(3000);
           await page.getByRole('button', {name: 'Connect now'}).first().click();
           await page.waitForTimeout(7000);
-          await page.mouse.click(1318, 85);
+          await page.evaluate(() => { const xs = [...document.querySelectorAll('button,[role="button"]')].filter(e => { const r=e.getBoundingClientRect(); return r.width>0 && r.height>0 && r.right > innerWidth-350 && r.top < 180; }); if (xs.length) xs.sort((a,b) => b.getBoundingClientRect().right-a.getBoundingClientRect().right)[0].click(); });
           await page.waitForTimeout(1000);
           const editor = page.locator('[role="textbox"][aria-label="Editor content"]:visible').first();
           async function run(query, shot) {
-            await editor.click();
+            await editor.click({force: true});
             await page.keyboard.press('Control+A');
             await page.keyboard.type(query);
             await page.getByRole('button', {name: /Run query/i}).click();
