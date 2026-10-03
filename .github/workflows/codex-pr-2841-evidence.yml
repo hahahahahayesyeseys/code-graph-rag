@@ -107,7 +107,7 @@ jobs:
           await page.waitForTimeout(3000);
           await page.getByRole('button', {name: 'Connect now'}).first().click();
           await page.waitForTimeout(7000);
-          const welcome = page.getByText('Welcome to Memgraph Lab', {exact: true}); const wb = await welcome.boundingBox(); if (!wb) throw new Error('Welcome dialog text not found'); await page.mouse.click(wb.x + 1010, wb.y - 162); await page.waitForTimeout(1000);
+          const welcome = page.getByText('Welcome to Memgraph Lab', {exact: true}); await welcome.evaluate(el => { let p = el; while (p) { const r = p.getBoundingClientRect(); if (r.width > 800 && r.height > 400) { p.remove(); return; } p = p.parentElement; } throw new Error('Welcome dialog container not found'); }); await page.waitForTimeout(1000);
           await page.waitForTimeout(1000);
           await page.evaluate(() => { const t=[...document.querySelectorAll('*')].find(e => e.textContent?.trim() === 'Welcome to Memgraph Lab'); let e=t; while (e && e.getBoundingClientRect().width < 500) e=e.parentElement; if (e) e.style.display='none'; });
           const editor = page.locator('[role="textbox"][aria-label="Editor content"]').first();
