@@ -99,7 +99,7 @@ jobs:
 
       - name: Capture Memgraph Lab page for selector discovery
         run: |
-          cat >/tmp/inspect_lab.mjs <<'JS'
+          cat >inspect_lab.mjs <<'JS'
           import { chromium } from 'playwright';
           const browser = await chromium.launch({headless: true});
           const page = await browser.newPage({viewport: {width: 1600, height: 1000}, deviceScaleFactor: 1});
@@ -111,7 +111,7 @@ jobs:
           console.log(text);
           await browser.close();
           JS
-          node /tmp/inspect_lab.mjs
+          node inspect_lab.mjs
 
       - name: Upload Lab discovery artifact
         if: always()
