@@ -109,7 +109,7 @@ jobs:
           await page.waitForTimeout(7000);
           await page.keyboard.press('Escape');
           await page.waitForTimeout(1000);
-          const editor = page.getByRole('textbox', {name: 'Editor content'}).first();
+          const editor = page.locator('[role="textbox"][aria-label="Editor content"]:visible').first();
           async function run(query, shot) {
             await editor.click();
             await page.keyboard.press('Control+A');
