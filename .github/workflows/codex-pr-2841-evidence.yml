@@ -80,7 +80,7 @@ jobs:
               encoding='utf-8',
           )
           parsers, queries = load_parsers()
-          with MemgraphIngestor(host='127.0.0.1', port=7687) as ingestor:
+          with MemgraphIngestor(host='127.0.0.1', port=7687, batch_size=1) as ingestor:
               GraphUpdater(
                   ingestor=ingestor,
                   repo_path=repo,
