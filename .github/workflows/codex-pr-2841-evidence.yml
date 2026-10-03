@@ -1,0 +1,129 @@
+name: PR 2841 real graph evidence
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  evidence:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      BASE_SHA: 677af1fd313434c16b174f3c72d92cec64b96ed4
+    steps:
+      - name: Checkout evidence branch
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Fetch PR base and create isolated checkout
+        run: |
+          git fetch origin "$BASE_SHA"
+          git worktree add --detach /tmp/cgr-base "$BASE_SHA"
+
+      - name: Install uv and project dependencies
+        uses: astral-sh/setup-uv@v6
+        with:
+          version: latest
+          enable-cache: true
+          cache-dependency-glob: uv.lock
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: uv sync --extra treesitter-full --extra test --group dev
+
+      - name: Start Memgraph and Memgraph Lab
+        run: |
+          docker network create cgr-evidence
+          docker run -d --name cgr-memgraph --network cgr-evidence \
+            -p 7687:7687 \
+            memgraph/memgraph-mage:3.3
+          docker run -d --name cgr-lab --network cgr-evidence \
+            -p 3000:3000 \
+            -e QUICK_CONNECT_MG_HOST=cgr-memgraph \
+            -e QUICK_CONNECT_MG_PORT=7687 \
+            memgraph/lab:3.13.2
+          for i in {1..60}; do
+            if docker exec cgr-memgraph mgconsole --no-history -c 'RETURN 1;' >/dev/null 2>&1; then break; fi
+            sleep 2
+          done
+          for i in {1..60}; do
+            if curl -fsS http://127.0.0.1:3000 >/dev/null; then break; fi
+            sleep 2
+          done
+
+      - name: Index identical fixture with base and PR code
+        run: |
+          cat >/tmp/index_fixture.py <<'PY'
+          import sys
+          from pathlib import Path
+          from codebase_rag.graph_updater import GraphUpdater
+          from codebase_rag.parser_loader import load_parsers
+          from codebase_rag.services.graph_service import MemgraphIngestor
+
+          repo = Path(sys.argv[1])
+          repo.mkdir(parents=True, exist_ok=True)
+          (repo / 'models.py').write_text(
+              'class Remote:\\n'
+              '    @property\\n'
+              '    def name(self):\\n'
+              '        return "remote"\\n\\n'
+              'class Local:\\n'
+              '    def label(self):\\n'
+              '        return self.name.upper()\\n',
+              encoding='utf-8',
+          )
+          parsers, queries = load_parsers()
+          with MemgraphIngestor(host='127.0.0.1', port=7687) as ingestor:
+              GraphUpdater(
+                  ingestor=ingestor,
+                  repo_path=repo,
+                  parsers=parsers,
+                  queries=queries,
+              ).run()
+              ingestor.flush_all()
+          PY
+          PYTHONPATH=/tmp/cgr-base uv run --no-sync python /tmp/index_fixture.py /tmp/base-fixture
+          PYTHONPATH="$GITHUB_WORKSPACE" uv run --no-sync python /tmp/index_fixture.py /tmp/after-fixture
+
+      - name: Install Chromium and Playwright
+        run: |
+          npm install --no-save playwright@1.52.0
+          npx playwright install --with-deps chromium
+
+      - name: Capture Memgraph Lab page for selector discovery
+        run: |
+          cat >/tmp/inspect_lab.mjs <<'JS'
+          import { chromium } from 'playwright';
+          const browser = await chromium.launch({headless: true});
+          const page = await browser.newPage({viewport: {width: 1600, height: 1000}, deviceScaleFactor: 1});
+          await page.goto('http://127.0.0.1:3000', {waitUntil: 'networkidle'});
+          await page.waitForTimeout(5000);
+          await page.screenshot({path: 'lab-home.png', fullPage: true});
+          const text = await page.locator('body').innerText();
+          await import('node:fs/promises').then(fs => fs.writeFile('lab-body.txt', text));
+          console.log(text);
+          await browser.close();
+          JS
+          node /tmp/inspect_lab.mjs
+
+      - name: Upload Lab discovery artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pr-2841-lab-discovery
+          path: |
+            lab-home.png
+            lab-body.txt
+            /tmp/cgr-lab.log
+          if-no-files-found: ignore
+
+      - name: Stop containers
+        if: always()
+        run: docker rm -f cgr-lab cgr-memgraph || true
