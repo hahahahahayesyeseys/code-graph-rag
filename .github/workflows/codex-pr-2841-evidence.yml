@@ -66,6 +66,7 @@ jobs:
           from codebase_rag.graph_updater import GraphUpdater
           from codebase_rag.parser_loader import load_parsers
           from codebase_rag.services.graph_service import MemgraphIngestor
+          from codebase_rag.tests.conftest import _MockIngestor
 
           repo = Path(sys.argv[1])
           repo.mkdir(parents=True, exist_ok=True)
@@ -75,18 +76,31 @@ jobs:
               '    def name(self):\\n'
               '        return "remote"\\n\\n'
               'class Local:\\n'
+              '    name: str\\n\\n'
               '    def label(self):\\n'
-              '        return self.name.upper()\\n',
+              '        return self.name.upper()\\n\\n'
+              '    def update(self, name):\\n'
+              '        self.name = name\\n',
               encoding='utf-8',
           )
           parsers, queries = load_parsers()
+          recording = _MockIngestor()
+          GraphUpdater(
+              ingestor=recording,
+              repo_path=repo,
+              parsers=parsers,
+              queries=queries,
+          ).run()
           with MemgraphIngestor(host='127.0.0.1', port=7687, batch_size=1) as ingestor:
-              GraphUpdater(
-                  ingestor=ingestor,
-                  repo_path=repo,
-                  parsers=parsers,
-                  queries=queries,
-              ).run()
+              for call in recording.ensure_node_batch.call_args_list:
+                  label, properties = call.args[:2]
+                  ingestor.ensure_node_batch(getattr(label, 'value', str(label)), properties)
+              for call in recording.ensure_relationship_batch.call_args_list:
+                  source, rel_type, target = call.args[:3]
+                  properties = call.args[3] if len(call.args) > 3 else {}
+                  source = (getattr(source[0], 'value', str(source[0])), source[1], source[2])
+                  target = (getattr(target[0], 'value', str(target[0])), target[1], target[2])
+                  ingestor.ensure_relationship_batch(source, getattr(rel_type, 'value', str(rel_type)), target, properties)
               ingestor.flush_all()
           PY
           PYTHONPATH=/tmp/cgr-base uv run --no-sync python /tmp/index_fixture.py /tmp/base-fixture
