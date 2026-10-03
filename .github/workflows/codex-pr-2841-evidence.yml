@@ -119,11 +119,11 @@ jobs:
             await page.screenshot({path: shot, fullPage: true});
           }
           await run(
-            "MATCH (c:Method)-[r:CALLS]->(p:Method) WHERE c.qualified_name STARTS WITH 'base-fixture' AND c.qualified_name ENDS WITH 'Local.label' RETURN c, r, p;",
+            "MATCH (c)-[r:CALLS]->(p) RETURN c, r, p;",
             'lab-before.png',
           );
           await run(
-            "MATCH (c:Method)-[r:CALLS]->(p:Method) WHERE c.qualified_name STARTS WITH 'after-fixture' AND c.qualified_name ENDS WITH 'Local.label' RETURN c, r, p;",
+            "MATCH (c)-[r:CALLS]->(p) RETURN c, r, p;",
             'lab-after.png',
           );
           await browser.close();
