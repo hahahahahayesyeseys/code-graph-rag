@@ -112,10 +112,10 @@ jobs:
           await page.evaluate(() => { const t=[...document.querySelectorAll('*')].find(e => e.textContent?.trim() === 'Welcome to Memgraph Lab'); let e=t; while (e && e.getBoundingClientRect().width < 500) e=e.parentElement; if (e) e.style.display='none'; });
           const editor = page.locator('[role="textbox"][aria-label="Editor content"]').first();
           async function run(query, shot) {
-            await editor.click({force: true});
+            await editor.evaluate(el => el.focus());
             await page.keyboard.press('Control+A');
             await page.keyboard.type(query);
-            await page.getByRole('button', {name: /Run query/i}).click();
+            await page.getByRole('button', {name: /Run query/i}).click({force: true});
             await page.waitForTimeout(5000);
             await page.screenshot({path: shot, fullPage: true});
           }
