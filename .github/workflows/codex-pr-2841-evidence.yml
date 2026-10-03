@@ -97,18 +97,21 @@ jobs:
           npm install --no-save playwright@1.52.0
           npx playwright install --with-deps chromium
 
-      - name: Capture Memgraph Lab page for selector discovery
+      - name: Connect to Memgraph Lab and inspect query editor
         run: |
           cat >inspect_lab.mjs <<'JS'
           import { chromium } from 'playwright';
+          import { writeFile } from 'node:fs/promises';
           const browser = await chromium.launch({headless: true});
           const page = await browser.newPage({viewport: {width: 1600, height: 1000}, deviceScaleFactor: 1});
           await page.goto('http://127.0.0.1:3000', {waitUntil: 'networkidle'});
-          await page.waitForTimeout(5000);
-          await page.screenshot({path: 'lab-home.png', fullPage: true});
-          const text = await page.locator('body').innerText();
-          await import('node:fs/promises').then(fs => fs.writeFile('lab-body.txt', text));
-          console.log(text);
+          await page.waitForTimeout(3000);
+          const buttons = page.getByRole('button', {name: 'Connect now'});
+          await buttons.first().click();
+          await page.waitForTimeout(7000);
+          await page.screenshot({path: 'lab-connected.png', fullPage: true});
+          await writeFile('lab-connected-body.txt', await page.locator('body').innerText());
+          console.log(await page.locator('body').innerText());
           await browser.close();
           JS
           node inspect_lab.mjs
@@ -119,9 +122,8 @@ jobs:
         with:
           name: pr-2841-lab-discovery
           path: |
-            lab-home.png
-            lab-body.txt
-            /tmp/cgr-lab.log
+            lab-connected.png
+            lab-connected-body.txt
           if-no-files-found: ignore
 
       - name: Stop containers
