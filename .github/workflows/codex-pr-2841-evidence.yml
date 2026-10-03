@@ -97,11 +97,10 @@ jobs:
           npm install --no-save playwright@1.52.0
           npx playwright install --with-deps chromium
 
-      - name: Inspect Memgraph Lab query editor
+      - name: Render before and after in Memgraph Lab
         run: |
           cat >inspect_lab.mjs <<'JS'
           import { chromium } from 'playwright';
-          import { writeFile } from 'node:fs/promises';
           const browser = await chromium.launch({headless: true});
           const page = await browser.newPage({viewport: {width: 1600, height: 1000}, deviceScaleFactor: 1});
           await page.goto('http://127.0.0.1:3000', {waitUntil: 'networkidle'});
@@ -110,11 +109,23 @@ jobs:
           await page.waitForTimeout(7000);
           await page.keyboard.press('Escape');
           await page.waitForTimeout(1000);
-          const info = await page.locator('textarea, input, [role="textbox"], iframe').evaluateAll(els => els.map(e => ({tag:e.tagName, role:e.getAttribute('role'), aria:e.getAttribute('aria-label'), placeholder:e.getAttribute('placeholder'), cls:e.className, id:e.id, outer:e.outerHTML.slice(0,1000)})));
-          await writeFile('lab-editor-info.json', JSON.stringify(info, null, 2));
-          await writeFile('lab-query-body.txt', await page.locator('body').innerText());
-          await page.screenshot({path: 'lab-editor.png', fullPage: true});
-          console.log(JSON.stringify(info, null, 2));
+          const editor = page.getByRole('textbox', {name: 'Editor content'}).first();
+          async function run(query, shot) {
+            await editor.click();
+            await page.keyboard.press('Control+A');
+            await page.keyboard.type(query);
+            await page.getByRole('button', {name: /Run query/i}).click();
+            await page.waitForTimeout(5000);
+            await page.screenshot({path: shot, fullPage: true});
+          }
+          await run(
+            "MATCH (c:Method)-[r:CALLS]->(p:Method) WHERE c.qualified_name STARTS WITH 'base-fixture' AND c.qualified_name ENDS WITH 'Local.label' RETURN c, r, p;",
+            'lab-before.png',
+          );
+          await run(
+            "MATCH (c:Method)-[r:CALLS]->(p:Method) WHERE c.qualified_name STARTS WITH 'after-fixture' AND c.qualified_name ENDS WITH 'Local.label' RETURN c, r, p;",
+            'lab-after.png',
+          );
           await browser.close();
           JS
           node inspect_lab.mjs
@@ -125,9 +136,8 @@ jobs:
         with:
           name: pr-2841-lab-discovery
           path: |
-            lab-editor.png
-            lab-editor-info.json
-            lab-query-body.txt
+            lab-before.png
+            lab-after.png
           if-no-files-found: ignore
 
       - name: Stop containers
