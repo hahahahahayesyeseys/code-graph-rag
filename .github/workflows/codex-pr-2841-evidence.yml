@@ -119,11 +119,11 @@ jobs:
             await page.screenshot({path: shot, fullPage: true});
           }
           await run(
-            "MATCH (c)-[r:CALLS]->(p) RETURN c, r, p;",
+            "MATCH (c)-[r]->(p) RETURN c, r, p LIMIT 50;",
             'lab-before.png',
           );
           await run(
-            "MATCH (c)-[r:CALLS]->(p) RETURN c, r, p;",
+            "MATCH (c)-[r]->(p) RETURN c, r, p LIMIT 50;",
             'lab-after.png',
           );
           await browser.close();
