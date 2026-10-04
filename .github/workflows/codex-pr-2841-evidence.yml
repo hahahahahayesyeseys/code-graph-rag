@@ -135,11 +135,11 @@ jobs:
             await page.screenshot({path: shot, fullPage: true});
           }
           await run(
-            "MATCH (c:Method)-[r:CALLS]->(p:Method) RETURN c, r, p;",
+            "MATCH (c:Method)-[r:CALLS]->(p:Method) RETURN c.qualified_name AS caller, type(r) AS edge, p.qualified_name AS callee;",
             'lab-before.png',
           );
           await run(
-            "MATCH (c:Method)-[r:CALLS]->(p:Method) RETURN c, r, p;",
+            "MATCH (c:Method)-[r:CALLS]->(p:Method) RETURN c.qualified_name AS caller, type(r) AS edge, p.qualified_name AS callee;",
             'lab-after.png',
           );
           await browser.close();
